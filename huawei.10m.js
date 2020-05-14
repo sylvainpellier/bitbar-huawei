@@ -22,7 +22,7 @@ const common_unit_mb = "MB";
 const common_unit_kb = "KB";
 const common_unit_tb = "TB";
 
-const batteryStatus = ["sur batterie","branché"];
+const batteryStatus = ["branché","sur batterie"];
 batteryStatus[-1] = "batterie faible";
 
 const networks = [];
@@ -110,22 +110,40 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
     let signal = data[2];
     let plmn = data[3];
 
-    let dateFin = new Date(stats.MonthLastClearTime[0]);
+    let dateDebut = new Date(stats.MonthLastClearTime[0]);
     let dataAujourdHui = new Date();
-    let reste = 30 - (dataAujourdHui - dateFin) / 1000 / 60 / 60 / 24;
-    let UtilisationNormalJour = (100000000000 / 30) * 0.8;
-    let Normal = reste * UtilisationNormalJour;
 
+    let numberDay = daysInMonth( dateDebut.getMonth(), dateDebut.getFullYear() );
 
+    let jours = (dataAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
+    let resteJours = numberDay - jours;
+    let UtilisationNormalJour = (100 / numberDay) * 0.8;
+    let DoitRester = resteJours * UtilisationNormalJour;
+    let total = toGB(stats.total);
+    let MoyenneJour = Math.floor(total / jours);
+
+    let color;
+    if(total > 95)
+    {
+        color = "red";
+    } else if( (100 - total) < DoitRester )
+    {
+        color = "orange";
+    } else
+    {
+        color = "white";
+    }
 
     bitbar([
         {
-            text: getTrafficInfo(stats.total) ,
-            color: (parseInt(stats.total) < 90) && ( ((100000000000) - parseInt(stats.total)) < Normal ) ? "white" : "red",
+            text: getTrafficInfo(stats.total) , color
         },
         bitbar.separator,
         {
             text: "Échéance : "+ stats.MonthLastClearTime[0]
+        },
+        {
+          text : "Moyenne journalière : " + MoyenneJour + "GB"
         },
         {
             text:"Utilisateur connecté : " + status.CurrentWifiUser[0] + "/"+ status.TotalWifiUser[0]
@@ -187,4 +205,13 @@ function getTrafficInfo(bit) {
         }
 
     return final_str;
+}
+
+function toGB(bit)
+{
+    return formatFloat((parseFloat(bit) / g_monitoring_dumeter_gb), 2);
+}
+
+function daysInMonth (month, year) {
+    return new Date(year, month, 0).getDate();
 }
