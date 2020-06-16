@@ -39,16 +39,29 @@ etat[903] = "en cours de déconnexion";
 
 
 
-
 const g_monitoring_dumeter_kb = 1024;
 const g_monitoring_dumeter_mb = 1024 * 1024;
 const g_monitoring_dumeter_gb = 1024 * 1024 * 1024;
 const g_monitoring_dumeter_tb = 1024 * 1024 * 1024 * 1024;
 
+let alreadyError = false;
+
+function errorRouteur()
+{
+    if(!alreadyError) {
+        alreadyError = true;
+        bitbar([
+            {
+                text: "..."
+            }]);
+    }
+
+
+}
 
 router.getToken(function(error, token) {
 
-    if(error) { reject(); return false; }
+    if(error) {  errorRouteur(); return false; }
 
     const promiseStatus = new Promise((resolve, reject) => {
 
@@ -117,16 +130,17 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
 
     let jours = (dataAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
     let resteJours = numberDay - jours;
-    let UtilisationNormalJour = (100 / numberDay) * 0.8;
+    let UtilisationNormalJour = (100 / numberDay) * 0.9;
     let DoitRester = resteJours * UtilisationNormalJour;
     let total = toGB(stats.total);
-    let MoyenneJour = Math.floor(total / jours);
+    let MoyenneJour = parseFloat(((total / jours)).toFixed(2));
+    let Balance = parseFloat( ((jours * UtilisationNormalJour)  - (total)).toFixed(2));
 
     let color;
     if(total > 95)
     {
         color = "red";
-    } else if( (100 - total) < DoitRester )
+    } else if( (Balance < 0) )
     {
         color = "orange";
     } else
@@ -141,6 +155,10 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
         bitbar.separator,
         {
             text: "Échéance : "+ stats.MonthLastClearTime[0]
+        },
+
+        {
+            text : "Balance : " + (( Balance > 0) ? ( "+"+Balance) : (""+Balance) )+ "GB"
         },
         {
           text : "Moyenne journalière : " + MoyenneJour + "GB"
@@ -175,7 +193,7 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
 
 
     ]);
-});
+},errorRouteur);
 
 });
 
@@ -188,19 +206,19 @@ function getTrafficInfo(bit) {
     var final_str = '';
 
         if (g_monitoring_dumeter_kb > bit) {
-            final_number = formatFloat(parseFloat(bit), 2);
+            final_number = formatFloat(parseFloat(bit), 1);
             final_str = final_number + ' ' + common_unit_byte;
         } else if (g_monitoring_dumeter_kb <= bit && g_monitoring_dumeter_mb > bit) {
-            final_number = formatFloat(parseFloat(bit) / g_monitoring_dumeter_kb, 2);
+            final_number = formatFloat(parseFloat(bit) / g_monitoring_dumeter_kb, 1);
             final_str = final_number + ' ' + common_unit_kb;
         } else if (g_monitoring_dumeter_mb <= bit && g_monitoring_dumeter_gb > bit) {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_mb), 2);
+            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_mb), 1);
             final_str = final_number + ' ' + common_unit_mb;
         } else if (g_monitoring_dumeter_gb <= bit && g_monitoring_dumeter_tb > bit) {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_gb), 2);
+            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_gb), 1);
             final_str = final_number + ' ' + common_unit_gb;
         } else {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_tb), 2);
+            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_tb), 1);
             final_str = final_number + ' ' + common_unit_tb;
         }
 
