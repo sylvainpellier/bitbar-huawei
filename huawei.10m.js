@@ -17,10 +17,10 @@ const router = require('dialog-router-api').create({
     gateway: '192.168.0.1'
 });
 
-const common_unit_gb = "GB";
-const common_unit_mb = "MB";
-const common_unit_kb = "KB";
-const common_unit_tb = "TB";
+const common_unit_gb = "Go";
+const common_unit_mb = "Mo";
+const common_unit_kb = "Ko";
+const common_unit_tb = "To";
 
 const batteryStatus = ["branché","sur batterie"];
 batteryStatus[-1] = "batterie faible";
@@ -93,7 +93,10 @@ router.getToken(function(error, token) {
 
         if(error) reject();
 
+
         router.getMonthStatistics(token, function (error, data) {
+
+            if(!data.CurrentMonthDownload) { reject(); return false; }
 
             data.total = parseInt(data.CurrentMonthDownload[0],10) + parseInt(data.CurrentMonthUpload[0],10);
             resolve(data);
@@ -117,78 +120,79 @@ router.getToken(function(error, token) {
 
 
 
+
 Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=>{
+
     let stats = data[0];
     let status = data[1];
-    let signal = data[2];
     let plmn = data[3];
 
     let dateDebut = new Date(stats.MonthLastClearTime[0]);
-    let dataAujourdHui = new Date();
+    let dateAujourdHui = new Date();
 
-    let numberDay = daysInMonth( dateDebut.getMonth(), dateDebut.getFullYear() );
+    let nombreJourTotal = daysInMonth( dateDebut.getMonth(), dateDebut.getFullYear() );
+    let nombreJourPasse = (dateAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
 
-    let jours = (dataAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
-    let resteJours = numberDay - jours;
-    let UtilisationNormalJour = (100 / numberDay) * 0.9;
-    let DoitRester = resteJours * UtilisationNormalJour;
+    let utilisationNormalJour = (100 / nombreJourTotal) * 0.95;
     let total = toGB(stats.total);
-    let MoyenneJour = parseFloat(((total / jours)).toFixed(2));
-    let Balance = parseFloat( ((jours * UtilisationNormalJour)  - (total)).toFixed(2));
+    let moyenneJour = parseFloat(((total / nombreJourPasse)).toFixed(2));
+    let balance = parseFloat( ((nombreJourPasse * utilisationNormalJour)  - (total)).toFixed(2));
 
     let color;
-    if(total > 95)
+    if(total > 95 )
     {
         color = "red";
-    } else if( (Balance < 0) )
+    } else if( (balance < 0) )
     {
         color = "orange";
-    } else
+    }  else
     {
         color = "white";
     }
 
     bitbar([
         {
-            text: getTrafficInfo(stats.total) , color
+            text: (status.BatteryPercent[0] <= 50 ? "⦱ " : "") +getTrafficInfo(stats.total)   , color
         },
         bitbar.separator,
         {
-            text: "Échéance : "+ stats.MonthLastClearTime[0]
-        },
-
-        {
-            text : "Balance : " + (( Balance > 0) ? ( "+"+Balance) : (""+Balance) )+ "GB"
+            text: "Début : "+ stats.MonthLastClearTime[0]
         },
         {
-          text : "Moyenne journalière : " + MoyenneJour + "GB"
+            text: "Reste : "+ parseFloat(((100 - total)).toFixed(2)) + "Go"
         },
         {
-            text:"Utilisateur connecté : " + status.CurrentWifiUser[0] + "/"+ status.TotalWifiUser[0]
+            text : "Balance : " + (( balance > 0) ? "+" : "")  + balance + "Go"
         },
         {
-            text:"Puissance du signal : " + status.SignalIcon[0] + "/"+status.maxsignal[0]
-        },
-        {
-            text:"Connexion : " + networks[plmn.Rat[0]]
-        },
-        {
-            text: "Statut de la batterie : "+ batteryStatus[status.BatteryStatus[0]]
+          text : "Moyenne journalière : " + moyenneJour + "Go"
         },
         {
             text:"Batterie restante : " + status.BatteryPercent[0]+"%"
         },
         {
-            text:"Réseau : " + plmn.FullName[0]
-        },
-        {
-          text : "État de la connexion : "+ etat[status.ConnectionStatus[0]]
-        },
-        {
-            text:"Rscp: : " + signal.rscp[0]
-        },
-        {
-            text:"Rssi : " + signal.rssi[0]
+            text: 'Informations',
+            alternate:true,
+            submenu: [
+                {
+                    text:"Utilisateur connecté : " + status.CurrentWifiUser[0] + "/"+ status.TotalWifiUser[0]
+                },
+                bitbar.separator,
+                {
+                    text:"Puissance du signal : " + status.SignalIcon[0] + "/"+status.maxsignal[0]
+                },
+                {
+                    text:"Connexion : " + networks[plmn.Rat[0]]
+                },
+                {
+                    text:"Réseau : " + plmn.FullName[0]
+                },
+                {
+                    text : "État de la connexion : "+ etat[status.ConnectionStatus[0]]
+                },bitbar.separator,{
+                    text: "Statut de la batterie : "+ batteryStatus[status.BatteryStatus[0]]
+                }
+            ]
         }
 
 
