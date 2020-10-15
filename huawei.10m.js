@@ -12,6 +12,9 @@
 //npm i bitbar dialog-router-api -g
 //npm link bitbar dialog-router-api
 
+let format = 1;
+let forfaitBit = 100 * 1024 * 1024 * 1024;
+
 const dateFormat = require('dateformat');
 
 const bitbar = require('bitbar');
@@ -19,10 +22,11 @@ const router = require('dialog-router-api').create({
     gateway: '192.168.0.1'
 });
 
-const common_unit_gb = "Go";
-const common_unit_mb = "Mo";
-const common_unit_kb = "Ko";
-const common_unit_tb = "To";
+const common_unit_byte = "B";
+const common_unit_gb = "Gb";
+const common_unit_mb = "Mb";
+const common_unit_kb = "Kb";
+const common_unit_tb = "Tb";
 
 const batteryStatus = ["branché","sur batterie"];
 batteryStatus[-1] = "batterie faible";
@@ -40,26 +44,13 @@ etat[902] = "déconnecté";
 etat[903] = "en cours de déconnexion";
 
 
-
-const g_monitoring_dumeter_kb = 1024;
+const g_monitoring_dumeter_kb = 1024 ;
 const g_monitoring_dumeter_mb = 1024 * 1024;
 const g_monitoring_dumeter_gb = 1024 * 1024 * 1024;
 const g_monitoring_dumeter_tb = 1024 * 1024 * 1024 * 1024;
 
 let alreadyError = false;
 
-function errorRouteur()
-{
-    if(!alreadyError) {
-        alreadyError = true;
-        bitbar([
-            {
-                text: "..."
-            }]);
-    }
-
-
-}
 
 router.getToken(function(error, token) {
 
@@ -76,7 +67,6 @@ router.getToken(function(error, token) {
 
     });
 
-
     const promisePLMN = new Promise((resolve, reject) => {
 
         if(error) reject();
@@ -88,10 +78,7 @@ router.getToken(function(error, token) {
 
     });
 
-
-
-
-    const  promiseStats = new Promise((resolve, reject) => {
+    const promiseStats = new Promise((resolve, reject) => {
 
         if(error) reject();
 
@@ -106,8 +93,7 @@ router.getToken(function(error, token) {
 
     });
 
-
-    const  promiseSignal = new Promise((resolve, reject) => {
+    const promiseSignal = new Promise((resolve, reject) => {
 
         if(error) reject();
 
@@ -120,11 +106,9 @@ router.getToken(function(error, token) {
 
 
 
-
-
-
 Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=>{
 
+    console
     let stats = data[0];
     let status = data[1];
     let plmn = data[3];
@@ -135,13 +119,33 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
     let nombreJourTotal = daysInMonth( dateDebut.getMonth(), dateDebut.getFullYear() );
     let nombreJourPasse = (dateAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
 
-    let utilisationNormalJour = (100 / nombreJourTotal);
-    let total = toGB(stats.total);
-    let moyenneJour = parseFloat(((total / nombreJourPasse)).toFixed(1));
-    let balance = parseFloat( ((nombreJourPasse * utilisationNormalJour)  - (total)).toFixed(1));
+    if(nombreJourPasse <= 3 ) format = 2;
+
+
+    let utilisationNormalJour = (forfaitBit / nombreJourTotal);
+
+
+    let totalBits = stats.total;
+    let totalGb = totalBits / g_monitoring_dumeter_gb;
+
+
+    let moyenneJour =totalBits / nombreJourPasse;
+    let balance = (nombreJourPasse * utilisationNormalJour) - totalBits;
+
+    let resteJournee = 0;
+
+    if(balance > 0)
+    {
+        let heureMaintenant = dateAujourdHui.getHours();
+        let heuresRestantes = 24 - heureMaintenant;
+        resteJournee = moyenneJour / heuresRestantes;
+    }
+
+    if(totalGb <= 10 ) format = 2;
+
 
     let color;
-    if(total > 95 )
+    if(totalGb > 95 )
     {
         color = "red";
     } else if( (balance < 0) )
@@ -152,24 +156,27 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
         color = "white";
     }
 
-    let balanceTexte = (( balance > 0) ? "+" : "")  + balance + " Go";
+    let balanceTexte = (( balance > 0) ? "+" : "-")  + getTrafficInfo(balance,format);
 
     bitbar([
         {
-            text: (status.BatteryPercent[0] <= 50 && status.BatteryStatus[0] === 1 ? "⦱ " : "") +balanceTexte   , color
+            text: (status.BatteryPercent[0] <= 50 && status.BatteryStatus[0] === 1 ? "⚠ " : "") +balanceTexte   , color
         },
         bitbar.separator,
         {
-            text: "Total consommé : "+ getTrafficInfo(stats.total)
+            text: "Total consommé : "+ getTrafficInfo(totalBits,format)
         },
         {
-            text: "Reste à consommer : "+ parseFloat(((100 - total)).toFixed(1)) + " Go"
+            text: "Reste pour aujourd'hui : "+ getTrafficInfo(resteJournee,format)
+        },
+        {
+            text: "Reste à consommer : "+ getTrafficInfo(forfaitBit - totalBits,format)
         },
         {
             text : "Balance : " + balanceTexte
         },
         {
-          text : "Moyenne journalière : " + moyenneJour + " Go" + " / "+ parseFloat(utilisationNormalJour).toFixed(1)+ " Go"
+          text : "Moyenne journalière : " + getTrafficInfo(moyenneJour,format)+ " / "+ getTrafficInfo(utilisationNormalJour,format)
         },
         {
             text: "Date de début : "+ dateFormat(dateDebut, "dd-mm-yyyy")
@@ -185,7 +192,7 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
                 {
                     text:"Batterie restante : " + status.BatteryPercent[0]+"%"
                 },
-                ,{
+                {
                     text: "Statut de la batterie : "+ batteryStatus[status.BatteryStatus[0]]
                 },bitbar.separator,
                 {
@@ -200,6 +207,12 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
                 },
                 {
                     text:"Réseau : " + plmn.FullName[0]
+                },bitbar.separator,
+                {
+                    text:"Download : "+getTrafficInfo(stats.CurrentMonthDownload,format)
+                },
+                {
+                    text:"Upload : "+getTrafficInfo(stats.CurrentMonthUpload,format)
                 },
                 {
                     text : "État de la connexion : "+ etat[status.ConnectionStatus[0]]
@@ -213,39 +226,51 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
 
 });
 
-function formatFloat(src, pos) {
-    return Math.round(src * Math.pow(10, pos)) / Math.pow(10, pos);
-}
+function getTrafficInfo(bit,format) {
 
-function getTrafficInfo(bit) {
-    var final_number = 0;
-    var final_str = '';
 
-        if (g_monitoring_dumeter_kb > bit) {
-            final_number = formatFloat(parseFloat(bit), 1);
-            final_str = final_number + ' ' + common_unit_byte;
-        } else if (g_monitoring_dumeter_kb <= bit && g_monitoring_dumeter_mb > bit) {
-            final_number = formatFloat(parseFloat(bit) / g_monitoring_dumeter_kb, 1);
-            final_str = final_number + ' ' + common_unit_kb;
-        } else if (g_monitoring_dumeter_mb <= bit && g_monitoring_dumeter_gb > bit) {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_mb), 1);
-            final_str = final_number + ' ' + common_unit_mb;
-        } else if (g_monitoring_dumeter_gb <= bit && g_monitoring_dumeter_tb > bit) {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_gb), 1);
-            final_str = final_number + ' ' + common_unit_gb;
+
+    bit = Math.abs(bit);
+
+
+    let final_number = 0;
+    let final_str = '';
+    let final_unit = '';
+
+        if (bit < g_monitoring_dumeter_kb) {
+            final_number = bit;
+            final_unit = common_unit_byte;
+        } else if ( bit < g_monitoring_dumeter_mb) {
+            final_number = g_monitoring_dumeter_kb;
+            final_unit = common_unit_kb;
+        } else if ( bit < g_monitoring_dumeter_gb) {
+            final_number = bit / g_monitoring_dumeter_mb;
+            final_unit = common_unit_mb;
+        } else if ( bit < g_monitoring_dumeter_tb) {
+            final_number = bit / g_monitoring_dumeter_gb;
+            final_unit = common_unit_gb;
         } else {
-            final_number = formatFloat((parseFloat(bit) / g_monitoring_dumeter_tb), 1);
-            final_str = final_number + ' ' + common_unit_tb;
+            final_number = bit / g_monitoring_dumeter_tb;
+            final_unit =  common_unit_tb;
         }
+
+    final_str = final_number.toFixed(format) + " "+ final_unit;
 
     return final_str;
 }
 
-function toGB(bit)
-{
-    return formatFloat((parseFloat(bit) / g_monitoring_dumeter_gb), 2);
-}
-
 function daysInMonth (month, year) {
     return new Date(year, month, 0).getDate();
+}
+
+function errorRouteur() {
+    if(!alreadyError) {
+        alreadyError = true;
+        bitbar([
+            {
+                text: "..."
+            }]);
+    }
+
+
 }
