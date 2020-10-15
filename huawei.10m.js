@@ -12,6 +12,8 @@
 //npm i bitbar dialog-router-api -g
 //npm link bitbar dialog-router-api
 
+const dateFormat = require('dateformat');
+
 const bitbar = require('bitbar');
 const router = require('dialog-router-api').create({
     gateway: '192.168.0.1'
@@ -133,10 +135,10 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
     let nombreJourTotal = daysInMonth( dateDebut.getMonth(), dateDebut.getFullYear() );
     let nombreJourPasse = (dateAujourdHui - dateDebut) / 1000 / 60 / 60 / 24;
 
-    let utilisationNormalJour = (100 / nombreJourTotal) * 0.95;
+    let utilisationNormalJour = (100 / nombreJourTotal);
     let total = toGB(stats.total);
-    let moyenneJour = parseFloat(((total / nombreJourPasse)).toFixed(2));
-    let balance = parseFloat( ((nombreJourPasse * utilisationNormalJour)  - (total)).toFixed(2));
+    let moyenneJour = parseFloat(((total / nombreJourPasse)).toFixed(1));
+    let balance = parseFloat( ((nombreJourPasse * utilisationNormalJour)  - (total)).toFixed(1));
 
     let color;
     if(total > 95 )
@@ -150,30 +152,42 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
         color = "white";
     }
 
+    let balanceTexte = (( balance > 0) ? "+" : "")  + balance + " Go";
+
     bitbar([
         {
-            text: (status.BatteryPercent[0] <= 50 ? "⦱ " : "") +getTrafficInfo(stats.total)   , color
+            text: (status.BatteryPercent[0] <= 50 && status.BatteryStatus[0] === 1 ? "⦱ " : "") +balanceTexte   , color
         },
         bitbar.separator,
         {
-            text: "Début : "+ stats.MonthLastClearTime[0]
+            text: "Total consommé : "+ getTrafficInfo(stats.total)
         },
         {
-            text: "Reste : "+ parseFloat(((100 - total)).toFixed(2)) + "Go"
+            text: "Reste à consommer : "+ parseFloat(((100 - total)).toFixed(1)) + " Go"
         },
         {
-            text : "Balance : " + (( balance > 0) ? "+" : "")  + balance + "Go"
+            text : "Balance : " + balanceTexte
         },
         {
-          text : "Moyenne journalière : " + moyenneJour + "Go"
+          text : "Moyenne journalière : " + moyenneJour + " Go" + " / "+ parseFloat(utilisationNormalJour).toFixed(1)+ " Go"
+        },
+        {
+            text: "Date de début : "+ dateFormat(dateDebut, "dd-mm-yyyy")
         },
         {
             text:"Batterie restante : " + status.BatteryPercent[0]+"%"
         },
         {
             text: 'Informations',
+            dropdown:true,
             alternate:true,
             submenu: [
+                {
+                    text:"Batterie restante : " + status.BatteryPercent[0]+"%"
+                },
+                ,{
+                    text: "Statut de la batterie : "+ batteryStatus[status.BatteryStatus[0]]
+                },bitbar.separator,
                 {
                     text:"Utilisateur connecté : " + status.CurrentWifiUser[0] + "/"+ status.TotalWifiUser[0]
                 },
@@ -189,8 +203,6 @@ Promise.all([promiseStats,promiseStatus,promiseSignal,promisePLMN]).then((data)=
                 },
                 {
                     text : "État de la connexion : "+ etat[status.ConnectionStatus[0]]
-                },bitbar.separator,{
-                    text: "Statut de la batterie : "+ batteryStatus[status.BatteryStatus[0]]
                 }
             ]
         }
