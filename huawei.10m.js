@@ -9,8 +9,7 @@
 //<bitbar.abouturl>http://www.sylvainpellier.fr</bitbar.abouturl>
 
 //INSTALL
-//npm i bitbar dialog-router-api -g
-//npm link bitbar dialog-router-api
+//npm i bitbar dialog-router-api dateformat request-promise -g ; npm link bitbar dialog-router-api dateformat request-promise
 
 let format = 1;
 let forfaitBit = 100 * 1024 * 1024 * 1024;
